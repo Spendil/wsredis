@@ -18,7 +18,6 @@ async fn main() {
 
     let redis_config = format!("redis://{}:{}", &redis_addr, &redis_port);
 
-    // Подключение к Redis
     let client = match redis::Client::open(redis_config.clone()) {
         Ok(client) => client,
         Err(e) => {
@@ -29,10 +28,8 @@ async fn main() {
     let connection = client.get_multiplexed_async_connection().await.expect("Failed to connect to Redis");
     let redis_client = Arc::new(Mutex::new(connection));
 
-    // Хранилище всех активных соединений WebSocket
     let connections: Connections = Arc::new(Mutex::new(Vec::new()));
 
-    // Создаем маршрут для веб-сокетов
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(with_redis(redis_client.clone()))
@@ -43,7 +40,6 @@ async fn main() {
     let ws_addr: IpAddr = env::var("WS_ADDR").unwrap_or(String::from("127.0.0.1")).parse().expect("Invalid host address");
     let ws_port: u16 = env::var("WS_PORT").unwrap_or(String::from("3030")).parse().expect("Invalid port address");
 
-    // Запускаем Redis Pub/Sub listener
     tokio::spawn(redis_listener(connections.clone(), redis_config));
 
     let ws_config = (ws_addr, ws_port);
@@ -56,14 +52,12 @@ fn with_redis(
     warp::any().map(move || redis_client.clone())
 }
 
-// Передача списка соединений
 fn with_connections(
     connections: Connections,
 ) -> impl Filter<Extract = (Connections,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || connections.clone())
 }
 
-// Обработка каждого подключения
 async fn handle_connection(
     ws: warp::ws::WebSocket,
     redis_client: RedisClient,
@@ -72,13 +66,11 @@ async fn handle_connection(
     let (mut tx, mut rx) = ws.split();
     let (tx_msg, rx_msg) = tokio::sync::mpsc::unbounded_channel();
 
-    // Добавление соединения в список
     {
         let mut conns = connections.lock().await;
         conns.push(tx_msg.clone());
     }
 
-    // Попытка получить последнее сообщение из Redis и отправить его через WebSocket
     {
         let mut conn = redis_client.lock().await;
 
@@ -95,12 +87,11 @@ async fn handle_connection(
                 }
             }
             if let Err(_) = tx.send(warp::ws::Message::text(message)).await {
-                return; // Если не удалось отправить, прекращаем обработку
+                return;
             }
         }
     }
 
-    // Запуск задачи для отправки сообщений
     tokio::spawn(async move {
         let mut rx_msg = tokio_stream::wrappers::UnboundedReceiverStream::new(rx_msg);
         while let Some(message) = rx_msg.next().await {
@@ -110,16 +101,12 @@ async fn handle_connection(
         }
     });
 
-    // Обработка входящих сообщений
     while let Some(Ok(msg)) = rx.next().await {
         if msg.is_text() {
             let original_text = msg.to_str().unwrap_or("").to_string();
             let mut text = original_text.clone();
             let mut conn = redis_client.lock().await;
 
-            // Публикация в Redis канал
-            
-            
             if original_text == "time" {
                 let time_value: i64 = if conn.exists(TIME_KEY).await.unwrap_or(false) {
                     conn.incr(TIME_KEY, 1).await.unwrap_or(0)
@@ -143,22 +130,18 @@ async fn handle_connection(
         }
     }
 
-    // Удаление соединения из списка
     {
         let mut conns = connections.lock().await;
         conns.retain(|conn| !conn.same_channel(&tx_msg));
     }
 }
 
-// Listener для Redis Pub/Sub
 async fn redis_listener(connections: Connections, redis_config: String) {
-    // Создаем отдельное PubSub соединение
     let mut pubsub_conn = {
         let client = redis::Client::open(redis_config).expect("Failed while connecting to redis");
         client.get_async_connection().await.expect("Failed while creating PubSub connection")
     }.into_pubsub();
 
-    // Подписка на канал
     pubsub_conn.subscribe(MAIN_CHANNEL).await.expect("Failed while subscribing to the channel");
 
     let mut pubsub_stream = pubsub_conn.on_message();
