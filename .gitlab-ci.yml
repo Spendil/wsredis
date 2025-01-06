@@ -17,9 +17,10 @@ deploy:
   variables:
     WORKING_DIR: /home/www/poker-pavel/web-socket
   script:
-    - cd $WORKING_DIR && cargo clean && cargo build --release
-    - systemctl set-environment WORKING_DIR=$WORKING_DIR REDIS_ADDR=$REDIS_ADDR REDIS_PORT=$REDIS_PORT WS_ADDR=$WS_ADDR WS_PORT=$WS_PORT
-    - systemctl restart poker-pavel-ws.service
+    - cd $WORKING_DIR && git stash && git pull origin main
+    - cargo clean && cargo build --release
+    - sudo systemctl set-environment WORKING_DIR=$WORKING_DIR REDIS_ADDR=$REDIS_ADDR REDIS_PORT=$REDIS_PORT WS_ADDR=$WS_ADDR WS_PORT=$WS_PORT
+    - sudo systemctl restart poker-pavel-ws.service
   only:
     refs:
       - main

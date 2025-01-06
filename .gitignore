@@ -1,2 +1,4 @@
-ws-redis/
-target/
+ws-redis
+target
+
+Cargo.lock
