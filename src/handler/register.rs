@@ -1,10 +1,9 @@
 use argon2::Config;
 use redis::AsyncCommands;
 
-use crate::types::{ApiResponse, RedisClient, RegisterRequest};
+use crate::{constants::TTL_SECONDS, types::{ApiResponse, RedisClient, RegisterRequest}};
 
 pub async fn handle(req: RegisterRequest, redis_client: RedisClient) -> Result<impl warp::Reply, warp::Rejection>{
-	const TTL_SECONDS: i64 = 3600;
     let mut conn = redis_client.lock().await;
 
     let hashed_password = argon2::hash_encoded(req.password.as_bytes(), b"randomsalt", &Config::default()).unwrap();

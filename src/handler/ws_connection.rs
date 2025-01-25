@@ -1,4 +1,4 @@
-use crate::types::{Connections, RedisClient};
+use crate::{constants::{MAIN_CHANNEL, TIME_KEY}, types::{Connections, RedisClient}};
 use futures::{SinkExt, StreamExt};
 use redis::AsyncCommands;
 use warp;
@@ -7,9 +7,7 @@ pub async fn handle(
 	ws: warp::ws::WebSocket,
     redis_client: RedisClient,
     connections: Connections,
-) {
-	const MAIN_CHANNEL: &str = "knopki_updates";
-	const TIME_KEY: &str = "knopki_time";
+) {	
 
     let (mut tx, mut rx) = ws.split();
     let (tx_msg, rx_msg) = tokio::sync::mpsc::unbounded_channel();
