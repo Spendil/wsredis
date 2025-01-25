@@ -2,10 +2,13 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, mpsc::UnboundedSender};
 use redis::aio::MultiplexedConnection;
 use warp::ws::Message;
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc};
 
 pub type RedisClient = Arc<Mutex<MultiplexedConnection>>;
 pub type Connections = Arc<Mutex<Vec<UnboundedSender<Message>>>>;
+
+pub type RedisConfig = String;
+pub type ServerConfig = (IpAddr, u16);
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {

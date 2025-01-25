@@ -1,13 +1,13 @@
 mod types;
+mod config;
 
 use types::{Connections, RedisClient, ApiResponse, AuthRequest, RegisterRequest};
 use futures::{SinkExt, StreamExt};
-use std::{net::IpAddr, sync::Arc};
+use std::sync::Arc;
 use argon2::{self, Config};
 use redis::AsyncCommands;
 use tokio::sync::Mutex;
 use warp::Filter;
-use std::env;
 
 const MAIN_CHANNEL: &str = "knopki_updates";
 const TIME_KEY: &str = "knopki_time";
@@ -15,10 +15,8 @@ const TTL_SECONDS: i64 = 3600;
 
 #[tokio::main]
 async fn main() {
-    let redis_addr = env::var("REDIS_ADDR").unwrap_or(String::from("127.0.0.1"));
-    let redis_port = env::var("REDIS_PORT").unwrap_or(String::from("6379"));
 
-    let redis_config = format!("redis://{}:{}", &redis_addr, &redis_port);
+    let (redis_config, server_config) = config::create();
 
     let client = match redis::Client::open(redis_config.clone()) {
         Ok(client) => client,
@@ -48,13 +46,10 @@ async fn main() {
 
     let routes = register_table_route.or(ws_route);
 
-    let ws_addr: IpAddr = env::var("WS_ADDR").unwrap_or(String::from("127.0.0.1")).parse().expect("Invalid host address");
-    let ws_port: u16 = env::var("WS_PORT").unwrap_or(String::from("3030")).parse().expect("Invalid port address");
 
     tokio::spawn(redis_listener(connections.clone(), redis_config));
 
-    let ws_config = (ws_addr, ws_port);
-    warp::serve(routes).run(ws_config).await;
+    warp::serve(routes).run(server_config).await;
 }
 
 fn with_redis(
