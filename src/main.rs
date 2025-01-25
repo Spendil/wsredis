@@ -1,36 +1,17 @@
+mod types;
+
+use types::{Connections, RedisClient, ApiResponse, AuthRequest, RegisterRequest};
 use futures::{SinkExt, StreamExt};
-use redis::{aio::MultiplexedConnection, AsyncCommands};
 use std::{net::IpAddr, sync::Arc};
+use argon2::{self, Config};
+use redis::AsyncCommands;
 use tokio::sync::Mutex;
 use warp::Filter;
 use std::env;
-use serde::{Serialize, Deserialize};
-use argon2::{self, Config};
-
-type RedisClient = Arc<Mutex<MultiplexedConnection>>;
-type Connections = Arc<Mutex<Vec<tokio::sync::mpsc::UnboundedSender<warp::ws::Message>>>>;
 
 const MAIN_CHANNEL: &str = "knopki_updates";
 const TIME_KEY: &str = "knopki_time";
 const TTL_SECONDS: i64 = 3600;
-
-#[derive(Deserialize)]
-struct RegisterRequest {
-    tablename: String,
-    password: String,
-}
-
-#[derive(Deserialize)]
-struct AuthRequest {
-    tablename: String,
-    password: String,
-}
-
-#[derive(Serialize)]
-struct ApiResponse {
-    status: String,
-    message: String,
-}
 
 #[tokio::main]
 async fn main() {
