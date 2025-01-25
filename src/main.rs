@@ -4,12 +4,33 @@ use std::{net::IpAddr, sync::Arc};
 use tokio::sync::Mutex;
 use warp::Filter;
 use std::env;
+use serde::{Serialize, Deserialize};
+use argon2::{self, Config};
 
 type RedisClient = Arc<Mutex<MultiplexedConnection>>;
 type Connections = Arc<Mutex<Vec<tokio::sync::mpsc::UnboundedSender<warp::ws::Message>>>>;
 
 const MAIN_CHANNEL: &str = "knopki_updates";
 const TIME_KEY: &str = "knopki_time";
+const TTL_SECONDS: i64 = 3600;
+
+#[derive(Deserialize)]
+struct RegisterRequest {
+    tablename: String,
+    password: String,
+}
+
+#[derive(Deserialize)]
+struct AuthRequest {
+    tablename: String,
+    password: String,
+}
+
+#[derive(Serialize)]
+struct ApiResponse {
+    status: String,
+    message: String,
+}
 
 #[tokio::main]
 async fn main() {
@@ -30,6 +51,12 @@ async fn main() {
 
     let connections: Connections = Arc::new(Mutex::new(Vec::new()));
 
+    let register_table_route = warp::path("register")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(with_redis(redis_client.clone()))
+        .and_then(handle_register);
+
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(with_redis(redis_client.clone()))
@@ -37,13 +64,16 @@ async fn main() {
         .map(|ws: warp::ws::Ws, redis_client, connections| {
             ws.on_upgrade(move |socket| handle_connection(socket, redis_client, connections))
         });
+
+    let routes = register_table_route.or(ws_route);
+
     let ws_addr: IpAddr = env::var("WS_ADDR").unwrap_or(String::from("127.0.0.1")).parse().expect("Invalid host address");
     let ws_port: u16 = env::var("WS_PORT").unwrap_or(String::from("3030")).parse().expect("Invalid port address");
 
     tokio::spawn(redis_listener(connections.clone(), redis_config));
 
     let ws_config = (ws_addr, ws_port);
-    warp::serve(ws_route).run(ws_config).await;
+    warp::serve(routes).run(ws_config).await;
 }
 
 fn with_redis(
@@ -56,6 +86,28 @@ fn with_connections(
     connections: Connections,
 ) -> impl Filter<Extract = (Connections,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || connections.clone())
+}
+
+async fn handle_register(req: RegisterRequest, redis_client: RedisClient) -> Result<impl warp::Reply, warp::Rejection>{
+    let mut conn = redis_client.lock().await;
+
+    let hashed_password = argon2::hash_encoded(req.password.as_bytes(), b"randomsalt", &Config::default()).unwrap();
+    let table_key = format!("table:{}", req.tablename);
+
+    if conn.exists(&table_key).await.unwrap_or(false) {
+        return Ok(warp::reply::json(&ApiResponse {
+            status: "error".to_string(),
+            message: "Table with such name already exists".to_string(),
+        }));
+    }
+
+    let _: () = conn.hset(&table_key, "hashed_password", hashed_password).await.unwrap_or(());
+    let _: () = conn.expire(&table_key, TTL_SECONDS).await.unwrap_or(());
+
+    Ok(warp::reply::json(&ApiResponse {
+        status: "success".to_string(),
+        message: "Table registered".to_string(),
+    }))
 }
 
 async fn handle_connection(
