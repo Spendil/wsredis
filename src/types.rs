@@ -16,12 +16,6 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
-#[derive(Deserialize)]
-pub struct AuthRequest {
-    pub tablename: String,
-    pub password: String,
-}
-
 #[derive(Serialize)]
 pub struct ApiResponse {
     pub status: String,
