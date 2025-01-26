@@ -26,4 +26,5 @@ pub struct AuthRequest {
 pub struct ApiResponse {
     pub status: String,
     pub message: String,
+    pub token: Option<String>
 }
