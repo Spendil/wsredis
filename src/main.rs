@@ -25,9 +25,9 @@ async fn main() {
     let connection = client.get_multiplexed_async_connection().await.expect("Failed to connect to Redis");
     let redis_client = Arc::new(Mutex::new(connection));
     let connections: Connections = Arc::new(Mutex::new(Vec::new()));
-    let routes = router::create(redis_client, connections.clone());
+    let routes = router::create(redis_client, connections.clone(), redis_config);
 
-    tokio::spawn(pubsub::listener(connections.clone(), redis_config));
+    
 
     warp::serve(routes).run(server_config).await;
 }

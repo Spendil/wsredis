@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::{Connections, RedisClient};
+use crate::{pubsub, types::{Connections, RedisClient, RedisConfig}};
 use futures::{SinkExt, StreamExt};
 use redis::AsyncCommands;
 use warp;
@@ -10,10 +10,12 @@ pub async fn handle(
     query: HashMap<String, String>,
     redis_client: RedisClient,
     connections: Connections,
+    redis_config: RedisConfig
 ) {	
 
     let session_key = query.get("session").unwrap();
     let table_key = query.get("tablename").unwrap();
+    let channel = table_key.to_string();
 
     let (mut tx, mut rx) = ws.split();
     let (tx_msg, rx_msg) = tokio::sync::mpsc::unbounded_channel();
@@ -22,6 +24,8 @@ pub async fn handle(
         let mut conns = connections.lock().await;
         conns.push(tx_msg.clone());
     }
+
+    tokio::spawn(pubsub::listener(connections.clone(), redis_config, channel));
 
     {
         let mut conn = redis_client.lock().await;
