@@ -7,6 +7,7 @@ mod filter;
 mod ws_route;
 mod register_route;
 mod auth_route;
+mod table_list_route;
 
 pub fn create(redis_client: RedisClient, connections: Connections, redis_config: RedisConfig) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
 	let cors = warp::cors().allow_any_origin()
@@ -16,7 +17,8 @@ pub fn create(redis_client: RedisClient, connections: Connections, redis_config:
 
 	let auth = auth_route::create(redis_client.clone()).with(cors.clone());
 	let register = register_route::create(redis_client.clone()).with(cors.clone());
+	let table_list = table_list_route::create(redis_client.clone());
 	let ws = ws_route::create(redis_client, connections, redis_config);
 	
-	register.or(auth).or(ws)
+	register.or(auth).or(table_list).or(ws)
 }
