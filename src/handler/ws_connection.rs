@@ -66,7 +66,6 @@ pub async fn handle(
             
             let session_is_valid = if conn.exists(&session_key).await.unwrap_or(false) {
                 let session = conn.get(session_key).await.unwrap_or(String::from(""));
-                println!("session: {}", session);
                 session == *table_key
             } else {
                 false
@@ -94,7 +93,6 @@ pub async fn handle(
                 let _: () = conn.hset(&table_key, "action", original_text).await.unwrap_or(());
             } else {
                 println!("invalid session trying to send {}", original_text);
-                // let _ = tx.send(warp::ws::Message::text("Authorize to have write permisiions.")).await;
             }
         }
     }
