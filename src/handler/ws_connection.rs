@@ -13,8 +13,8 @@ pub async fn handle(
     redis_config: RedisConfig
 ) {	
 
-    let session_key = query.get("session").unwrap();
-    let table_key = query.get("tablename").unwrap();
+    let session_key = query.get("session").map(String::as_str).unwrap_or("");
+    let table_key = query.get("tablename").map(String::as_str).unwrap_or("");
     let channel = table_key.to_string();
 
     let (mut tx, mut rx) = ws.split();
