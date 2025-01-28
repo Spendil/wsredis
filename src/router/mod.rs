@@ -17,7 +17,7 @@ pub fn create(redis_client: RedisClient, connections: Connections, redis_config:
 
 	let auth = auth_route::create(redis_client.clone()).with(cors.clone());
 	let register = register_route::create(redis_client.clone()).with(cors.clone());
-	let table_list = table_list_route::create(redis_client.clone());
+	let table_list = table_list_route::create(redis_client.clone()).with(cors.clone());;
 	let ws = ws_route::create(redis_client, connections, redis_config);
 	
 	register.or(auth).or(table_list).or(ws)
