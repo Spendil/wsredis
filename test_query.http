@@ -1,0 +1,20 @@
+### create table
+POST http://localhost:3030/register HTTP/1.1
+
+{
+	"tablename": "new table",
+	"password": "lolpwd"
+}
+
+### auth in table
+POST http://localhost:3030/auth HTTP/1.1
+
+{
+	"tablename": "new table",
+	"password": "lolpwd"
+}
+
+### get all tables
+GET http://localhost:3030/tables HTTP/1.1
+
+Content-Type: application/json
