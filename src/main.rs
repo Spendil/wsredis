@@ -6,7 +6,7 @@ mod pubsub;
 mod constants;
 
 use types::Connections;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 #[tokio::main]
@@ -24,7 +24,7 @@ async fn main() {
 
     let connection = client.get_multiplexed_async_connection().await.expect("Failed to connect to Redis");
     let redis_client = Arc::new(Mutex::new(connection));
-    let connections: Connections = Arc::new(Mutex::new(Vec::new()));
+    let connections: Connections = Arc::new(Mutex::new(HashMap::new()));
     let routes = router::create(redis_client, connections.clone(), redis_config);
 
     

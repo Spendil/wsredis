@@ -22,10 +22,13 @@ pub async fn handle(
 
     {
         let mut conns = connections.lock().await;
-        conns.push(tx_msg.clone());
+        conns.entry(channel.clone())
+            .or_insert_with(Vec::new)
+            .push(tx_msg.clone());
     }
+    
 
-    tokio::spawn(pubsub::listener(connections.clone(), redis_config, channel));
+    tokio::spawn(pubsub::listener(connections.clone(), redis_config, channel.clone()));
 
     {
         let mut conn = redis_client.lock().await;
@@ -98,7 +101,9 @@ pub async fn handle(
     }
 
     {
-        let mut conns = connections.lock().await;
-        conns.retain(|conn| !conn.same_channel(&tx_msg));
+    let mut conns = connections.lock().await;
+    if let Some(channel_conns) = conns.get_mut(&channel) {
+        channel_conns.retain(|conn| !std::ptr::eq(conn, &tx_msg));
     }
+}
 }

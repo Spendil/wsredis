@@ -12,15 +12,18 @@ pub async fn listener(
         client.get_async_connection().await.expect("Failed while creating PubSub connection")
     }.into_pubsub();
 
-    pubsub_conn.subscribe(channel).await.expect("Failed while subscribing to the channel");
+    let channel_clone = channel.clone();
+    pubsub_conn.subscribe(channel_clone).await.expect("Failed while subscribing to the channel");
 
     let mut pubsub_stream = pubsub_conn.on_message();
 
     while let Some(msg) = pubsub_stream.next().await {
         if let Ok(payload) = msg.get_payload::<String>() {
             let conns = connections.lock().await;
-            for conn in conns.iter() {
-                let _ = conn.send(warp::ws::Message::text(payload.clone()));
+            if let Some(channel_conns) = conns.get(&channel) {
+                for conn in channel_conns.iter() {
+                    let _ = conn.send(warp::ws::Message::text(payload.clone()));
+                }
             }
         }
     }
