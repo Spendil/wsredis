@@ -1,9 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{pubsub, types::{Connections, RedisClient, RedisConfig}};
 use futures::{SinkExt, StreamExt};
 use redis::AsyncCommands;
+use tokio::sync::Mutex;
 use warp;
+
+type Listeners = Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>;
 
 pub async fn handle(
 	ws: warp::ws::WebSocket,
@@ -12,6 +15,9 @@ pub async fn handle(
     connections: Connections,
     redis_config: RedisConfig
 ) {	
+    static LISTENERS: once_cell::sync::Lazy<Listeners> = once_cell::sync::Lazy::new(|| {
+        Arc::new(Mutex::new(HashMap::new()))
+    });
 
     let session_key = query.get("session").map(String::as_str).unwrap_or("");
     let table_key = query.get("tablename").map(String::as_str).unwrap_or("");
@@ -26,9 +32,18 @@ pub async fn handle(
             .or_insert_with(Vec::new)
             .push(tx_msg.clone());
     }
-    
 
-    tokio::spawn(pubsub::listener(connections.clone(), redis_config, channel.clone()));
+    {
+        let mut listeners = LISTENERS.lock().await;
+        if !listeners.contains_key(&channel) {
+            let handle = tokio::spawn(pubsub::listener(
+                connections.clone(),
+                redis_config.clone(),
+                channel.clone()
+            ));
+            listeners.insert(channel.clone(), handle);
+        }
+    }
 
     {
         let mut conn = redis_client.lock().await;
@@ -100,10 +115,17 @@ pub async fn handle(
         }
     }
 
-    {
-    let mut conns = connections.lock().await;
-    if let Some(channel_conns) = conns.get_mut(&channel) {
-        channel_conns.retain(|conn| !std::ptr::eq(conn, &tx_msg));
+   {
+        let mut conns = connections.lock().await;
+        if let Some(channel_conns) = conns.get_mut(&channel) {
+            channel_conns.retain(|conn| !std::ptr::eq(conn, &tx_msg));
+            if channel_conns.is_empty() {
+                conns.remove(&channel);
+                let mut listeners = LISTENERS.lock().await;
+                if let Some(handle) = listeners.remove(&channel) {
+                    handle.abort();
+                }
+            }
+        }
     }
-}
 }

@@ -15,16 +15,23 @@ pub async fn listener(
     let channel_clone = channel.clone();
     pubsub_conn.subscribe(channel_clone).await.expect("Failed while subscribing to the channel");
 
-    let mut pubsub_stream = pubsub_conn.on_message();
-
-    while let Some(msg) = pubsub_stream.next().await {
-        if let Ok(payload) = msg.get_payload::<String>() {
-            let conns = connections.lock().await;
-            if let Some(channel_conns) = conns.get(&channel) {
-                for conn in channel_conns.iter() {
-                    let _ = conn.send(warp::ws::Message::text(payload.clone()));
+    {
+        let mut pubsub_stream = pubsub_conn.on_message();
+        while let Some(msg) = pubsub_stream.next().await {
+            if let Ok(payload) = msg.get_payload::<String>() {
+                let conns = connections.lock().await;
+                if let Some(channel_conns) = conns.get(&channel) {
+                    for conn in channel_conns.iter() {
+                        let _ = conn.send(warp::ws::Message::text(payload.clone()));
+                    }
                 }
             }
+        }
+    }
+
+    {
+        if let Err(e) = pubsub_conn.unsubscribe(&channel).await {
+            eprintln!("Failed to unsubscribe from channel: {}", e);
         }
     }
 }
