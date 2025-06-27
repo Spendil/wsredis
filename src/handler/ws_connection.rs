@@ -23,6 +23,8 @@ pub async fn handle(
     let table_key = query.get("tablename").map(String::as_str).unwrap_or("");
     let channel = table_key.to_string();
 
+    let conn_id = format!("conn_{}_{}", channel, chrono::Utc::now().timestamp_nanos());
+
     let (mut tx, mut rx) = ws.split();
     let (tx_msg, rx_msg) = tokio::sync::mpsc::unbounded_channel();
 
@@ -36,12 +38,13 @@ pub async fn handle(
     {
         let mut listeners = LISTENERS.lock().await;
         if !listeners.contains_key(&channel) {
+            println!("Spawning listener for channel: {}", channel);
             let handle = tokio::spawn(pubsub::listener(
                 connections.clone(),
                 redis_config.clone(),
                 channel.clone()
             ));
-            listeners.insert(channel.clone(), handle);
+            listeners.insert(conn_id.clone(), handle);
         }
     }
 
@@ -119,12 +122,14 @@ pub async fn handle(
         let mut conns = connections.lock().await;
         if let Some(channel_conns) = conns.get_mut(&channel) {
             channel_conns.retain(|conn| !std::ptr::eq(conn, &tx_msg));
+            println!("Removed connection {} for channel {}, remaining: {}", conn_id, channel, channel_conns.len());
+            let mut listeners = LISTENERS.lock().await;
+            if let Some(handle) = listeners.remove(&conn_id) {
+                handle.abort();
+                println!("Listener for connection {} on channel {} aborted", conn_id, channel);
+            }
             if channel_conns.is_empty() {
                 conns.remove(&channel);
-                let mut listeners = LISTENERS.lock().await;
-                if let Some(handle) = listeners.remove(&channel) {
-                    handle.abort();
-                }
             }
         }
     }
